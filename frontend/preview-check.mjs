@@ -14,6 +14,8 @@ try{
  await page.goto('http://127.0.0.1:5180');await page.locator('.product').first().waitFor();assert.equal(await page.locator('.product').count(),8);
  assert.equal(await page.locator('.section-heading h2 span').count(),0);
  assert.equal(await page.locator('.brand-row svg').count(),0);
+ assert.equal(await page.getByRole('button',{name:'个人中心',exact:true}).count(),0);
+ assert.equal(await page.locator('.topline button').count(),1);
  assert.deepEqual(await page.getByRole('tab').allTextContents(),['最新发布','价格从低到高']);
  assert.equal(await page.getByRole('tab',{selected:true}).innerText(),'最新发布');
  await page.getByRole('tab',{name:'价格从低到高'}).click();
@@ -24,6 +26,12 @@ try{
  await page.getByRole('tab',{name:'最新发布'}).click();
  for(const [width,height] of [[320,740],[390,844],[430,932],[1440,1000]]){
   await page.setViewportSize({width,height});await page.evaluate(()=>document.fonts.ready);
+  const search=page.getByLabel('搜索校园闲置');
+  assert.ok(await search.evaluate(el=>parseFloat(getComputedStyle(el).fontSize)>=16));
+  await search.focus();
+  assert.equal(await page.evaluate(()=>visualViewport.scale),1);
+  assert.ok(await page.locator('meta[name="viewport"]').evaluate(el=>!/(user-scalable\s*=\s*no|maximum-scale)/i.test(el.content)));
+  await search.blur();
   await page.locator('.product img').first().evaluate(img=>img.decode());
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`overflow at ${width}`);
   assert.ok(await page.locator('.product img').evaluateAll(images=>images.every(img=>img.complete&&img.naturalWidth>0)));
@@ -50,6 +58,8 @@ try{
  await page.getByRole('button',{name:'逛校园',exact:true}).click();
  assert.equal(await page.locator('.discover-intro').count(),0);
  assert.equal(await page.locator('.campus-folder').count(),6);
+ await page.locator('.folder-surface img').evaluateAll(images=>Promise.all(images.map(img=>img.decode())));
+ assert.ok(await page.locator('.folder-surface img').evaluateAll(images=>images.every(img=>img.naturalWidth===720&&img.src.includes('/assets/')&&img.src.endsWith('.webp'))));
  assert.equal(await page.locator('.page-title svg').count(),0);
  assert.equal(await page.locator('.folder-edge,.tab-right,.folder-glass').count(),0);
  assert.equal(await page.locator('.folder-surface img').first().evaluate(img=>getComputedStyle(img).filter),'none');
@@ -102,24 +112,40 @@ try{
  await page.getByRole('button',{name:'首页',exact:true}).click();
  await page.locator('.campus-button').click();await page.getByRole('button',{name:'全部校区',exact:true}).click();
  await page.getByRole('button',{name:'首页',exact:true}).click();
- await page.getByLabel('筛选商品',{exact:true}).click();
+ assert.equal(await page.getByLabel('筛选商品',{exact:true}).count(),0);
+ assert.equal(await page.getByRole('checkbox',{name:'免费送',exact:true}).count(),1);
+ await page.getByRole('checkbox',{name:'免费送',exact:true}).check();
+ await page.waitForFunction(()=>document.querySelectorAll('.product').length===1);
+ assert.equal(await page.locator('.product .price').innerText(),'免费领走');
+ await page.getByRole('checkbox',{name:'免费送',exact:true}).uncheck();
+ await page.waitForFunction(()=>document.querySelectorAll('.product').length===8);
+ await page.getByRole('button',{name:'数码',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelectorAll('.product').length===2);
+ await page.getByRole('button',{name:'全部',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelectorAll('.product').length===8);
+ await page.locator('.campus-button').click();
  await page.getByRole('dialog').waitFor();
  await page.keyboard.press('Shift+Tab');
  assert.ok(await page.evaluate(()=>Boolean(document.activeElement.closest('[role="dialog"]'))));
  await page.keyboard.press('Escape');
  await page.getByRole('dialog').waitFor({state:'hidden'});
- await page.waitForFunction(()=>document.activeElement.getAttribute('aria-label')==='筛选商品',{},{timeout:2000});
- assert.equal(await page.evaluate(()=>document.activeElement.getAttribute('aria-label')),'筛选商品');
+ await page.waitForFunction(()=>document.activeElement.matches('.campus-button'),{},{timeout:2000});
+ assert.ok(await page.evaluate(()=>document.activeElement.matches('.campus-button')));
  await page.getByLabel('搜索校园闲置').fill('相机');await page.getByRole('button',{name:'搜索',exact:true}).click();assert.equal(await page.locator('.product').count(),1);
  await page.locator('.image-button').click();await page.getByRole('button',{name:'收藏',exact:true}).click();await page.getByRole('button',{name:'已收藏',exact:true}).waitFor();
 
  await page.getByRole('button',{name:'我想要 · 约定面交'}).click();
  await page.getByLabel('建议面交地点',{exact:true}).fill('图书馆外公共区域');
+ assert.ok(await page.getByLabel('建议面交地点',{exact:true}).evaluate(el=>parseFloat(getComputedStyle(el).fontSize)>=16));
  const dt=new Date(Date.now()+3600000);const local=new Date(dt.getTime()-dt.getTimezoneOffset()*60000).toISOString().slice(0,16);
  await page.getByLabel('建议面交时间',{exact:true}).fill(local);
  await page.locator('input[name=safetyConfirmed]').check();
  await page.getByRole('button',{name:'提交面交请求',exact:true}).click();
  await page.getByText('待卖家确认',{exact:true}).waitFor();
+ const cancel=page.getByRole('button',{name:'取消本次请求',exact:true});
+ assert.ok((await cancel.boundingBox()).height>=44);
+ assert.equal(await cancel.locator('svg').count(),1);
+ assert.equal(await cancel.evaluate(el=>getComputedStyle(el).borderTopStyle),'solid');
  await page.screenshot({path:'test-results/meeting-pending.png'});
  await page.getByRole('button',{name:'取消本次请求'}).click();await page.getByText('已取消',{exact:true}).waitFor();
 

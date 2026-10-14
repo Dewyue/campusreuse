@@ -11,7 +11,7 @@
 | 湘雅新校区 | 杏林校区，桐梓坡路172号 | https://rsc.csu.edu.cn/img/figma/yingxinxiaoqu.png |
 | 湘雅老校区 | 开福校区，湘雅路88号 | https://rsc.csu.edu.cn/img/figma/kaifuxiaoqu.png |
 
-文件位于 `frontend/public/images/campuses/`，原样下载，界面通过 object-fit 裁切。仅作为课程原型的校区识别素材；官方公开展示不等于开放许可，权利归原权利人，公开商业使用前需确认授权。不暗示本服务属于学校官方。
+原始文件保留于 `frontend/public/images/campuses/`。界面使用 `frontend/assets/campuses/` 中的 WebP 衍生文件，维持 720×440 尺寸，使用 ffmpeg libwebp quality 80 / compression_level 6 压缩，无额外滤镜；由 Vite 生成带内容哈希的资源地址，进入应用时低优先级预加载。服务器部署对 /assets/ 配置长期缓存，HTML 和 API 不受影响。界面通过 object-fit 裁切。仅作为课程原型的校区识别素材；官方公开展示不等于开放许可，权利归原权利人，公开商业使用前需确认授权。不暗示本服务属于学校官方。
 
 交互：文件夹堆叠，六个标签统一左侧；点击向上抽起约 400ms 后进入对应校区列表，并清空旧关键词、品类及免费筛选，避免新校区被旧条件误筛成空。键盘 Enter/Space 可触发，减少动态效果偏好下立即跳转。离开页面卸载组件即取消未完成的转场，不执行延迟跳转。
 

@@ -1,5 +1,5 @@
 import React,{useState} from 'react';
-import {Camera,MapPin,Clock,Leaf,ChevronRight} from 'lucide-react';
+import {Camera,MapPin,Clock,Leaf,ChevronRight,CircleX} from 'lucide-react';
 import {campuses,categories,conditions,functions as functionStates,statusLabels,validatePhoto} from '../shared/market.js';
 
 export function Publish({submit,busy}){
@@ -58,7 +58,7 @@ function TradeCard({r,busy,onAction,onItem}){
   {r.status==='pending'&&r.role==='seller'&&<div className="trade-actions"><button className="primary" disabled={busy} onClick={()=>onAction(r.id,{action:'accept'})}>接受面交</button><button disabled={busy} onClick={()=>onAction(r.id,{action:'decline'})}>暂不接受</button></div>}
   {r.status==='accepted'&&!ownConfirmed&&<><label className="consent"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/><span>已核对物品情况，并且实际完成物品交接。</span></label><button className="primary" disabled={busy||!confirmed} onClick={()=>onAction(r.id,{action:'confirm',confirmed:true})}>确认实际交接</button></>}
   {r.status==='accepted'&&ownConfirmed&&<p className="demo-notice">你已确认交接，等待对方确认；此时尚不计入完成记录。</p>}
-  {['pending','accepted','legacy'].includes(r.status)&&!r.buyerConfirmed&&!r.sellerConfirmed&&<button className="text-action" disabled={busy} onClick={()=>onAction(r.id,{action:'cancel'})}>取消本次请求</button>}
+  {['pending','accepted','legacy'].includes(r.status)&&!r.buyerConfirmed&&!r.sellerConfirmed&&<div className="trade-cancel-row"><button className="cancel-request" disabled={busy} onClick={()=>onAction(r.id,{action:'cancel'})}><CircleX size={17} aria-hidden="true"/><span>取消本次请求</span></button></div>}
   {r.status==='accepted'&&<button className="text-action" disabled={busy} onClick={()=>onAction(r.id,{action:'issue'})}>记录交付分歧</button>}
   {r.status==='disputed'&&<p className="demo-notice">已暂停这件物品的后续预约，不计入完成记录。请双方核实并协商；本原型不提供客服仲裁。</p>}
   {r.status==='completed'&&<p className="reuse-status"><Leaf size={15}/>交接已记录 · 减碳待核算</p>}
