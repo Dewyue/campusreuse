@@ -1,6 +1,6 @@
 # 中南闲集：手机端演示原型
 
-线上：https://campusreuse.dewyue.com（服务器发布见 [DEPLOY.md](DEPLOY.md)）
+线上：https://campusreuse.dewyue.com
 
 采用中南大学蓝白视觉方向，保留分类入口、双列商品流和底部导航，加入校区筛选。项目是课程演示，与闲鱼官方及学校官方服务没有关联。
 
