@@ -4,6 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { items as seed } from './seed.js';
 import {createAuth,readToken,tokenCookie} from './auth.js';
+import {chatRouter} from './chat.ts';
 import {sortItems} from '../shared/item-order.js';
 import {normalizeCampus,validateListing,publicItem,publicRequest,expireRequests,createRequest,actOnRequest} from '../shared/market.js';
 
@@ -51,6 +52,7 @@ app.post('/api/logout',(req,res)=>{
  res.set('Set-Cookie',tokenCookie('',{secure:req.get('X-Forwarded-Proto')==='https'||req.secure,clear:true}));
  res.json({ok:true});
 });
+app.use('/api/conversations',chatRouter(db,allItems,readRequests));
 app.get('/api/items',(req,res)=>{
  const rs=readRequests();let result=allItems().map(i=>publicItem(i,rs,req.session));const {q,campus,category,sort,free,available}=req.query;
  if(q)result=result.filter(i=>(i.title+' '+i.description).toLocaleLowerCase().includes(String(q).toLocaleLowerCase()));

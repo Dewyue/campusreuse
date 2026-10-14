@@ -1,4 +1,5 @@
 import React,{useState} from 'react';
+import {ChatContact} from './Chat';
 import {Camera,MapPin,Clock,Leaf,ChevronRight,CircleX} from 'lucide-react';
 import {campuses,categories,conditions,functions as functionStates,statusLabels,validatePhoto} from '../shared/market.js';
 
@@ -49,12 +50,13 @@ function Evidence({record,busy,submit}){
  </form></details>;
 }
 
-function TradeCard({r,busy,onAction,onItem}){
+function TradeCard({r,busy,onAction,onItem,chat}){
  const [confirmed,setConfirmed]=useState(false);const ownConfirmed=r.role==='buyer'?r.buyerConfirmed:r.sellerConfirmed;
  return <article className="trade-record"><div className="trade-status"><b>{statusLabels[r.status]||'待确认'}</b><span>{r.role==='buyer'?'我想要的':'我发布的'}</span></div>
   <button className="reservation" onClick={()=>onItem(r.item)}>{r.item.photo||r.item.image!=='placeholder'?<img src={r.item.photo||'/images/'+r.item.image} alt={r.item.title}/>:<Camera size={24}/>}<div><b>{r.item.title}</b><p>{r.item.campus} · {r.agreedPrice===0?'免费赠送':'约定价格 ¥'+(r.agreedPrice??r.item.price)}</p></div><ChevronRight size={17}/></button>
   {r.meetingAt&&<div className="meeting-facts"><p><Clock size={14}/>{new Date(r.meetingAt).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})}</p><p><MapPin size={14}/>{r.place}</p></div>}
   {r.item.isDemo&&r.status==='pending'&&<p className="demo-notice">样例商品，无真实卖家响应。</p>}
+  {chat&&<ChatContact {...chat} item={r.item} requestId={r.id}/>}
   {r.status==='pending'&&r.role==='seller'&&<div className="trade-actions"><button className="primary" disabled={busy} onClick={()=>onAction(r.id,{action:'accept'})}>接受面交</button><button disabled={busy} onClick={()=>onAction(r.id,{action:'decline'})}>暂不接受</button></div>}
   {r.status==='accepted'&&!ownConfirmed&&<><label className="consent"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/><span>已核对物品情况，并且实际完成物品交接。</span></label><button className="primary" disabled={busy||!confirmed} onClick={()=>onAction(r.id,{action:'confirm',confirmed:true})}>确认实际交接</button></>}
   {r.status==='accepted'&&ownConfirmed&&<p className="demo-notice">你已确认交接，等待对方确认；此时尚不计入完成记录。</p>}
@@ -66,4 +68,4 @@ function TradeCard({r,busy,onAction,onItem}){
   {r.reason&&<p className="demo-notice">{r.reason}</p>}
  </article>;
 }
-export function Trades({records,busy,onAction,onItem}){return records.length?records.map(r=><TradeCard key={r.id} r={r} busy={busy} onAction={onAction} onItem={onItem}/>):<div className="empty"><Clock size={32}/><h3>还没有面交安排</h3><p>请求经卖家确认后，才形成面交约定。</p></div>;}
+export function Trades({records,busy,onAction,onItem,chat}){return records.length?records.map(r=><TradeCard key={r.id} r={r} busy={busy} onAction={onAction} onItem={onItem} chat={chat}/>):<div className="empty"><Clock size={32}/><h3>还没有面交安排</h3><p>请求经卖家确认后，才形成面交约定。</p></div>;}
