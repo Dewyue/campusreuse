@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { items as seed } from './seed.js';
+import {createAuth,readToken,tokenCookie} from './auth.js';
 import {sortItems} from '../shared/item-order.js';
 import {normalizeCampus,validateListing,publicItem,publicRequest,expireRequests,createRequest,actOnRequest} from '../shared/market.js';
 
@@ -20,9 +21,36 @@ for(const r of db.prepare('SELECT * FROM reservations').all()){
 const saveRequests=rs=>{const q=db.prepare('INSERT INTO trade_requests(id,body) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body');for(const r of rs)q.run(r.id,JSON.stringify(r));};
 const readRequests=()=>{const rs=db.prepare('SELECT body FROM trade_requests ORDER BY id').all().map(r=>JSON.parse(r.body));const before=JSON.stringify(rs);expireRequests(rs);if(before!==JSON.stringify(rs))saveRequests(rs);return rs;};
 const mutate=fn=>{db.exec('BEGIN IMMEDIATE');try{const rs=readRequests();const result=fn(rs);saveRequests(rs);db.exec('COMMIT');return result;}catch(e){db.exec('ROLLBACK');throw e;}};
+const auth=createAuth(db);
+const openPaths=new Set(['/health','/register','/login']);
 const app=express();app.disable('x-powered-by');app.use(express.json({limit:'2mb'}));
-app.use('/api',(req,res,next)=>{res.set('Cache-Control','no-store');const session=req.get('X-Demo-Session');if(req.path!='/health'&&!/^[a-zA-Z0-9-]{16,80}$/.test(session||''))return res.status(400).json({error:'缺少有效的演示会话'});req.session=session;next();});
-app.get('/api/health',(_,res)=>res.json({ok:true,mode:'demo'}));
+app.use('/api',(req,res,next)=>{
+ res.set('Cache-Control','no-store');
+ if(openPaths.has(req.path))return next();
+ const token=readToken(req);
+ if(token){
+  const user=auth.userFromToken(token);
+  if(!user)return res.status(401).json({error:'登录已失效，请重新登录'});
+  req.user=user;req.token=token;req.session='u:'+user.id;return next();
+ }
+ if(req.path==='/account'||req.path==='/logout')return res.status(401).json({error:'请先登录'});
+ const session=req.get('X-Demo-Session');
+ if(!/^[a-zA-Z0-9-]{16,80}$/.test(session||''))return res.status(400).json({error:'缺少有效的演示会话'});
+ req.session=session;next();
+});
+const sendAuth=(req,res,status,payload)=>{
+ res.set('Set-Cookie',tokenCookie(payload.token,{secure:req.get('X-Forwarded-Proto')==='https'||req.secure}));
+ res.status(status).json(payload);
+};
+app.get('/api/health',(_,res)=>res.json({ok:true,mode:'demo',auth:true}));
+app.post('/api/register',(req,res)=>sendAuth(req,res,201,auth.register(req.body||{})));
+app.post('/api/login',(req,res)=>sendAuth(req,res,200,auth.login(req.body||{})));
+app.get('/api/account',(req,res)=>res.json(req.user));
+app.post('/api/logout',(req,res)=>{
+ auth.logout(req.token);
+ res.set('Set-Cookie',tokenCookie('',{secure:req.get('X-Forwarded-Proto')==='https'||req.secure,clear:true}));
+ res.json({ok:true});
+});
 app.get('/api/items',(req,res)=>{
  const rs=readRequests();let result=allItems().map(i=>publicItem(i,rs,req.session));const {q,campus,category,sort,free,available}=req.query;
  if(q)result=result.filter(i=>(i.title+' '+i.description).toLocaleLowerCase().includes(String(q).toLocaleLowerCase()));
@@ -39,7 +67,9 @@ app.put('/api/favorites/:id',(req,res)=>{
  if(req.body.saved)db.prepare('INSERT OR IGNORE INTO favorites VALUES (?,?)').run(req.session,id);else db.prepare('DELETE FROM favorites WHERE session=? AND item_id=?').run(req.session,id);res.json({saved:req.body.saved});
 });
 app.post('/api/items',(req,res)=>{
- const clean=validateListing(req.body||{});const item={...clean,image:'placeholder',seller:'校园发布者',avatar:'同',color:'#e3ecf4',tag:'新发布',wish:0,owner:req.session};
+ const clean=validateListing(req.body||{});
+ const seller=req.user?.username||'校园发布者';
+ const item={...clean,image:'placeholder',seller,avatar:seller.slice(0,1),color:'#e3ecf4',tag:'新发布',wish:0,owner:req.session};
  const row=db.prepare('INSERT INTO items(body) VALUES (?)').run(JSON.stringify(item));res.status(201).json(publicItem({...item,id:Number(row.lastInsertRowid)},readRequests(),req.session));
 });
 app.post('/api/reservations',(req,res)=>{

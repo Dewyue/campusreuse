@@ -29,7 +29,7 @@ export function availability(item,requests){
 }
 export function publicItem(item,requests,actor){
  const {owner,...data}=item;
- return {...data,campus:normalizeCampus(item.campus),isMine:owner===actor,isDemo:!owner,availability:availability(item,requests),seller:owner?(owner===actor?'我':'校园发布者'):item.seller};
+ return {...data,campus:normalizeCampus(item.campus),isMine:owner===actor,isDemo:!owner,availability:availability(item,requests),seller:owner?(owner===actor?'我':(item.seller||'校园发布者')):item.seller};
 }
 export function publicRequest(r,items,requests,actor){
  const {buyer,seller,...safe}=r;

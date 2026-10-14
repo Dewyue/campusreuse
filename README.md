@@ -63,7 +63,7 @@ curl http://127.0.0.1:8088/api/health
 
 ## 已接通
 
-商品列表、关键词搜索、六校区与分类筛选、仅看可预约、价格排序、免费送、详情与收藏；实物照片发布、结构化品相和瑕疵披露；提出时间地点、卖家接受或拒绝、取消、过期、双方确认交接、分歧记录、再使用问卷。发布照片限单张 JPG/PNG/WebP、1 MiB，暂存为数据 URL，不是生产级图片服务。浏览器使用随机演示会话区分收藏和记录，刷新后保留；这不是学校身份认证。
+商品列表、关键词搜索、六校区与分类筛选、仅看可预约、价格排序、免费送、详情与收藏；实物照片发布、结构化品相和瑕疵披露；提出时间地点、卖家接受或拒绝、取消、过期、双方确认交接、分歧记录、再使用问卷。发布照片限单张 JPG/PNG/WebP、1 MiB，暂存为数据 URL，不是生产级图片服务。已提供自建账号注册/登录（密码哈希存 SQLite，会话令牌 30 天）。学校身份核验仍未做，任何人可自创账号。未登录时仍可用 `X-Demo-Session` 演示分区。
 
 只有双方分别确认才计入完成，单方操作不能算成交；完成记录也不是物理交接的独立证明。样例商品没有真实卖家，不会自动接受请求。在线本地预览只能演示单方流程；真实双会话流程需运行独立后端。
 
@@ -77,11 +77,15 @@ curl http://127.0.0.1:8088/api/health
 
 ## API 摘要
 
-除了健康检查外，请求需要 `X-Demo-Session`（16–80 位字母、数字或连字符）。这是演示分区标识，不是安全认证。
+注册、登录、退出、当前账号不需要演示会话。其余接口二选一：`Authorization: Bearer <token>`（登录后下发），或原来的 `X-Demo-Session`（16–80 位字母、数字或连字符，仅演示分区）。
 
 | 方法 | 路径 | 内容 |
 | --- | --- | --- |
-| GET | `/api/health` | 服务状态 |
+| GET | `/api/health` | 服务状态；`auth: true` 表示已接通账号 |
+| POST | `/api/register` | `{ "username", "password" }` → `{ token, user }`；账号 2–20 位汉字/字母/数字/下划线，密码 8–72 位 |
+| POST | `/api/login` | `{ "username", "password" }` → `{ token, user }` |
+| GET | `/api/account` | 当前登录用户 `{ id, username, createdAt }` |
+| POST | `/api/logout` | 作废当前令牌 |
 | GET | `/api/items?q=&campus=&category=&sort=&free=&available=` | 商品列表；sort 为 new/price，默认 new；available=true 只看可预约 |
 | POST | `/api/items` | title, description, price, category, campus, photo, condition, functionStatus, defects, pickupPlace, pickupWindow, disclosureConfirmed=true |
 | GET | `/api/me` | 当前会话的 favorites、published、reservations（买方）、incoming（卖方） |
