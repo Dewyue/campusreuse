@@ -1,4 +1,5 @@
 import {items as seed} from '../backend/seed.js';
+import {sortItems} from '../shared/item-order.js';
 import {normalizeCampus,validateListing,publicItem,publicRequest,expireRequests,createRequest,actOnRequest} from '../shared/market.js';
 const key='csu-market-preview-v1',actor='local-preview-buyer';
 function read(){try{const value=JSON.parse(localStorage.getItem(key));if(value&&Array.isArray(value.published)&&Array.isArray(value.favorites)&&Array.isArray(value.reservations))return value;}catch{}return {published:[],favorites:[],reservations:[]};}
@@ -17,7 +18,7 @@ export async function previewApi(path,options={}){
   if(p.get('category'))result=result.filter(i=>i.category===p.get('category'));
   if(p.get('free')==='true')result=result.filter(i=>i.price===0);
   if(p.get('available')==='true')result=result.filter(i=>i.availability==='available');
-  result.sort(p.get('sort')==='price'?(a,b)=>a.price-b.price:p.get('sort')==='new'?(a,b)=>b.id-a.id:(a,b)=>(a.featured??100)-(b.featured??100)||b.wish-a.wish);
+  sortItems(result,p.get('sort'));
   return result;
  }
  if(url.pathname==='/items'&&method==='POST'){

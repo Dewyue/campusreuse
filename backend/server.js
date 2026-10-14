@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { items as seed } from './seed.js';
+import {sortItems} from '../shared/item-order.js';
 import {normalizeCampus,validateListing,publicItem,publicRequest,expireRequests,createRequest,actOnRequest} from '../shared/market.js';
 
 const data=process.env.DATA_DIR||fileURLToPath(new URL('./data/',import.meta.url));
@@ -26,7 +27,7 @@ app.get('/api/items',(req,res)=>{
  const rs=readRequests();let result=allItems().map(i=>publicItem(i,rs,req.session));const {q,campus,category,sort,free,available}=req.query;
  if(q)result=result.filter(i=>(i.title+' '+i.description).toLocaleLowerCase().includes(String(q).toLocaleLowerCase()));
  if(campus)result=result.filter(i=>i.campus===normalizeCampus(campus));if(category)result=result.filter(i=>i.category===category);if(free==='true')result=result.filter(i=>i.price===0);if(available==='true')result=result.filter(i=>i.availability==='available');
- if(sort==='price')result.sort((a,b)=>a.price-b.price);else if(sort!=='new')result.sort((a,b)=>(a.featured??100)-(b.featured??100)||b.wish-a.wish);
+ sortItems(result,sort);
  res.json(result);
 });
 app.get('/api/me',(req,res)=>{

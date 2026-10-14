@@ -1,7 +1,5 @@
 # 中南闲集：手机端演示原型
 
-线上：https://campusreuse.dewyue.com
-
 采用中南大学蓝白视觉方向，保留分类入口、双列商品流和底部导航，加入校区筛选。项目是课程演示，与闲鱼官方及学校官方服务没有关联。
 
 ## 当前视觉调整：简洁商品导向
@@ -10,7 +8,9 @@
 
 已实际引入 `motion` 实现短时入场与分段指示器过渡，`@radix-ui/react-dialog` 处理弹窗的焦点锁定、Escape 关闭、背景不可交互与辅助技术语义。遵守系统减少动态效果设置。没有安装外部账号插件，也不需要用户另行授权设计工具。
 
-示例照片调整：相机使用 Unsplash `photo-1510127034890-ba27508e9f1c`；耳机使用 `photo-1583394838336-acd977736f90`。同步修正演示商品名称，避免图片品牌与描述不符。推荐顺序支持样例的 featured 字段，不表示真实热度或算法效果。既有数据库不覆盖用户数据；新的演示初始化与在线浏览器预览使用更新后的样例。
+示例照片调整：相机使用 Unsplash `photo-1510127034890-ba27508e9f1c`；耳机使用 `photo-1583394838336-acd977736f90`。同步修正演示商品名称，避免图片品牌与描述不符。界面移除“推荐”与列表件数，默认按发布顺序倒序，支持价格从低到高，同价时最新优先。排序不使用样例 featured/wish 字段；旧 recommend 请求按最新处理。既有数据库不覆盖用户数据；新的演示初始化与在线浏览器预览使用更新后的样例。
+
+2026-10-14 更新：“逛校园”改为六个官方校区照片文件夹，标签统一左侧、主体与标签圆角、无边框清晰图片，点击上升后进入对应校区；按视口高度完整显示六层。“我的发布”在“我的收藏”前，进入个人页默认显示发布。图片来源与使用边界见 [校区图片登记](docs/campus-image-sources.md)。毛玻璃已按用户反馈撤回，不是最终效果。
 
 ## 上一轮视觉参考
 
@@ -82,7 +82,7 @@ curl http://127.0.0.1:8088/api/health
 | 方法 | 路径 | 内容 |
 | --- | --- | --- |
 | GET | `/api/health` | 服务状态 |
-| GET | `/api/items?q=&campus=&category=&sort=&free=&available=` | 商品列表；sort 为 recommend/new/price；available=true 只看可预约 |
+| GET | `/api/items?q=&campus=&category=&sort=&free=&available=` | 商品列表；sort 为 new/price，默认 new；available=true 只看可预约 |
 | POST | `/api/items` | title, description, price, category, campus, photo, condition, functionStatus, defects, pickupPlace, pickupWindow, disclosureConfirmed=true |
 | GET | `/api/me` | 当前会话的 favorites、published、reservations（买方）、incoming（卖方） |
 | PUT | `/api/favorites/:id` | `{ "saved": true }`，幂等 |

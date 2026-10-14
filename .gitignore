@@ -1,5 +1,6 @@
 node_modules/
-dist/
 frontend/dist/
-*.db
-.DS_Store
+dist/
+backend/data/
+test-results/
+.env

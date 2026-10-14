@@ -40,11 +40,22 @@ jobs:
           $SSH "${USER}@${HOST}" 'bash -s' <<'EOS'
           set -euo pipefail
           if ! command -v docker >/dev/null 2>&1; then
-            curl -fsSL https://get.docker.com | sh
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y -qq docker.io docker-compose-v2
+            systemctl enable --now docker
           fi
           cd /opt/campus-market
           docker compose up -d --build
+          for i in 1 2 3 4 5 6 7 8; do
+            if curl -fsS http://127.0.0.1:8088/api/health; then
+              echo
+              break
+            fi
+            sleep 2
+          done
           curl -fsS http://127.0.0.1:8088/api/health
+          echo
           SITE=/etc/nginx/sites-available/campusreuse.dewyue.com
           cat > "$SITE" <<'NGX'
           server {

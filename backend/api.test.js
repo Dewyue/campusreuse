@@ -24,12 +24,17 @@ test('independent API: search, validation, publish, favorites, reservations, per
   assert.equal((await request('/health')).body.ok,true);
   assert.equal((await request('/items','GET',undefined,'')).status,400);
   assert.equal((await request('/items')).body.length,8);
+  assert.deepEqual((await request('/items')).body.map(i=>i.id),[8,7,6,5,4,3,2,1]);
+  const priced=(await request('/items?sort=price')).body;
+  assert.ok(priced.every((item,index)=>index===0||priced[index-1].price<=item.price));
   assert.equal((await request('/items?q='+encodeURIComponent('相机'))).body.length,1);
   assert.ok((await request('/items?free=true')).body.every(x=>x.price===0));
   assert.equal((await request('/items','POST',{title:'坏数据',price:-1})).status,400);
   const published=await request('/items','POST',listing);
   assert.equal(published.status,201);assert.ok(!('owner' in published.body));
   const id=published.body.id;
+  assert.equal((await request('/items')).body[0].id,id);
+  assert.equal((await request('/items?sort=recommend')).body[0].id,id);
   await request('/favorites/'+id,'PUT',{saved:true});await request('/favorites/'+id,'PUT',{saved:true});
   assert.deepEqual((await request('/me')).body.favorites,[id]);
   assert.deepEqual((await request('/me','GET',undefined,'other-session-123456')).body.favorites,[]);
