@@ -15,7 +15,7 @@ try{
  assert.equal(await page.locator('.section-heading h2 span').count(),0);
  assert.equal(await page.locator('.brand-row svg').count(),0);
  assert.equal(await page.getByRole('button',{name:'个人中心',exact:true}).count(),0);
- assert.equal(await page.locator('.topline button').count(),1);
+ assert.equal(await page.locator('.topline button').count(),0);
  assert.deepEqual(await page.getByRole('tab').allTextContents(),['最新发布','价格从低到高']);
  assert.equal(await page.getByRole('tab',{selected:true}).innerText(),'最新发布');
  await page.getByRole('tab',{name:'价格从低到高'}).click();
@@ -94,7 +94,7 @@ try{
   await page.waitForTimeout(110);
   assert.ok(await folder.count(),'folder must lift before navigation');
   const after=await folder.boundingBox();assert.ok(after.y<before.y-10,'folder moves upward');
-  await page.locator('.campus-button').filter({hasText:name}).waitFor();
+  await page.locator('.campus-status').filter({hasText:name}).waitFor();
   assert.equal(await page.locator('.campus-folder').count(),0);
   assert.equal(await page.evaluate(()=>localStorage.getItem('campus-filter')),name);
   await page.getByRole('button',{name:'逛校园',exact:true}).click();
@@ -102,7 +102,7 @@ try{
  await page.emulateMedia({reducedMotion:'reduce'});
  const keyboardFolder=page.getByRole('button',{name:'浏览南校区闲置',exact:true});
  await keyboardFolder.focus();await page.keyboard.press('Enter');
- await page.locator('.campus-button').filter({hasText:'南校区'}).waitFor();
+ await page.locator('.campus-status').filter({hasText:'南校区'}).waitFor();
  await page.emulateMedia({reducedMotion:'no-preference'});
  await page.getByRole('button',{name:'逛校园',exact:true}).click();
  await page.getByRole('button',{name:'浏览新校区闲置',exact:true}).locator('.folder-tab').click();
@@ -110,7 +110,8 @@ try{
  await page.waitForTimeout(500);
  await page.getByRole('heading',{name:'我的闲集',exact:true}).waitFor();
  await page.getByRole('button',{name:'首页',exact:true}).click();
- await page.locator('.campus-button').click();await page.getByRole('button',{name:'全部校区',exact:true}).click();
+ await page.locator('.active-filters button').click();
+ await page.locator('.campus-status').filter({hasText:'全部校区'}).waitFor();
  await page.getByRole('button',{name:'首页',exact:true}).click();
  assert.equal(await page.getByLabel('筛选商品',{exact:true}).count(),0);
  assert.equal(await page.getByRole('checkbox',{name:'免费送',exact:true}).count(),1);
@@ -123,14 +124,9 @@ try{
  await page.waitForFunction(()=>document.querySelectorAll('.product').length===2);
  await page.getByRole('button',{name:'全部',exact:true}).click();
  await page.waitForFunction(()=>document.querySelectorAll('.product').length===8);
- await page.locator('.campus-button').click();
- await page.getByRole('dialog').waitFor();
- await page.keyboard.press('Shift+Tab');
- assert.ok(await page.evaluate(()=>Boolean(document.activeElement.closest('[role="dialog"]'))));
- await page.keyboard.press('Escape');
- await page.getByRole('dialog').waitFor({state:'hidden'});
- await page.waitForFunction(()=>document.activeElement.matches('.campus-button'),{},{timeout:2000});
- assert.ok(await page.evaluate(()=>document.activeElement.matches('.campus-button')));
+ await page.locator('.campus-status').click();
+ assert.equal(await page.getByRole('dialog').count(),0);
+ assert.ok(await page.locator('.campus-status').evaluate(el=>getComputedStyle(el).fontSize==='18px'));
  await page.getByLabel('搜索校园闲置').fill('相机');await page.getByRole('button',{name:'搜索',exact:true}).click();assert.equal(await page.locator('.product').count(),1);
  await page.locator('.image-button').click();await page.getByRole('button',{name:'收藏',exact:true}).click();await page.getByRole('button',{name:'已收藏',exact:true}).waitFor();
 
