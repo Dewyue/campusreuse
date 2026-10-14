@@ -129,6 +129,9 @@ textarea { resize: vertical; }
 .page-title h1 { font-size: 28px; font-weight: 650; }
 .profile { display: flex; align-items: center; gap: 15px; padding: 6px 0; }
 .large-avatar { display: grid; place-items: center; width: 60px; height: 60px; border-radius: 50%; background: #edf1f5; color: var(--blue); font-size: 23px; }
+.auth-form { display: flex; flex-direction: column; gap: 16px; padding: 8px 0 28px; }
+.auth-tabs { margin: 0 0 4px; }
+.text-button { margin-left: auto; min-height: 44px; padding: 0 4px; color: var(--blue); font-size: 13px; }
 .profile h2 { font-size: 19px; font-weight: 600; }
 .profile p { color: #77777d; font-size: 11px; margin-top: 7px; }
 .stats { display: grid; grid-template-columns: repeat(3,1fr); padding: 29px 0; margin-bottom: 10px; border-bottom: 1px solid var(--line); }
