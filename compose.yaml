@@ -1,0 +1,19 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    restart: unless-stopped
+    volumes:
+      - market-data:/data
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8088:80"
+    depends_on:
+      - api
+volumes:
+  market-data:

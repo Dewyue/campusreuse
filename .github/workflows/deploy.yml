@@ -1,0 +1,78 @@
+name: Deploy campusreuse.dewyue.com
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ALIYUN_SSH_KEY
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and proxy on Aliyun
+        env:
+          HOST: ${{ secrets.ALIYUN_HOST }}
+          USER: ${{ secrets.ALIYUN_USER }}
+          KEY: ${{ secrets.ALIYUN_SSH_KEY }}
+          PORT: ${{ secrets.ALIYUN_PORT }}
+        run: |
+          set -euo pipefail
+          if [ -z "${HOST:-}" ] || [ -z "${USER:-}" ] || [ -z "${KEY:-}" ]; then
+            echo "::error::在本仓库 Settings → Secrets and variables → Actions 建 Environment「ALIYUN_SSH_KEY」，填 ALIYUN_HOST / ALIYUN_USER / ALIYUN_SSH_KEY。和这台服务器现有部署用的是同一套，不用新生成。"
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          printf '%s' "$KEY" | sed 's/\r$//' | sed 's/\\n/\n/g' > ~/.ssh/deploy_key
+          [ -n "$(tail -c1 ~/.ssh/deploy_key)" ] && echo >> ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keygen -y -f ~/.ssh/deploy_key >/dev/null
+          PORT="${PORT:-22}"
+          ssh-keyscan -p "$PORT" -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          SSH="ssh -i ~/.ssh/deploy_key -p $PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+          $SSH "${USER}@${HOST}" 'mkdir -p /opt/campus-market'
+          rsync -avz --delete \
+            -e "$SSH" \
+            --exclude .git \
+            --exclude node_modules \
+            ./ "${USER}@${HOST}:/opt/campus-market/"
+          $SSH "${USER}@${HOST}" 'bash -s' <<'EOS'
+          set -euo pipefail
+          if ! command -v docker >/dev/null 2>&1; then
+            curl -fsSL https://get.docker.com | sh
+          fi
+          cd /opt/campus-market
+          docker compose up -d --build
+          curl -fsS http://127.0.0.1:8088/api/health
+          SITE=/etc/nginx/sites-available/campusreuse.dewyue.com
+          cat > "$SITE" <<'NGX'
+          server {
+            listen 80;
+            listen [::]:80;
+            server_name campusreuse.dewyue.com;
+            return 301 https://$host$request_uri;
+          }
+          server {
+            listen 443 ssl http2;
+            listen [::]:443 ssl http2;
+            server_name campusreuse.dewyue.com;
+            ssl_certificate /etc/letsencrypt/live/campusreuse.dewyue.com/fullchain.pem;
+            ssl_certificate_key /etc/letsencrypt/live/campusreuse.dewyue.com/privkey.pem;
+            include /etc/letsencrypt/options-ssl-nginx.conf;
+            ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+            client_max_body_size 2m;
+            location / {
+              proxy_pass http://127.0.0.1:8088;
+              proxy_http_version 1.1;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+            }
+          }
+          NGX
+          ln -sfn "$SITE" /etc/nginx/sites-enabled/campusreuse.dewyue.com
+          nginx -t
+          systemctl reload nginx
+          EOS
