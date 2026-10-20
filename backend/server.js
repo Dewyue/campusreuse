@@ -30,20 +30,40 @@ const requireAccount=(req,res,next)=>{
  if(!req.user)return res.status(401).json({error:'请先登录后再操作'});
  next();
 };
+const purgeConversation=(conversationId)=>{
+ db.prepare('DELETE FROM chat_messages WHERE conversation_id=?').run(conversationId);
+ db.prepare('DELETE FROM chat_reads WHERE conversation_id=?').run(conversationId);
+ db.prepare('DELETE FROM conversations WHERE id=?').run(conversationId);
+};
 const purgeItemData=(itemId)=>{
  const item=allItems().find(i=>i.id===itemId);
  if(item?.photoFile)privacy.removePhoto(item.photoFile);
  const threads=db.prepare('SELECT id FROM conversations WHERE item_id=?').all(itemId);
- for(const t of threads){
-  db.prepare('DELETE FROM chat_messages WHERE conversation_id=?').run(t.id);
-  db.prepare('DELETE FROM chat_reads WHERE conversation_id=?').run(t.id);
- }
- db.prepare('DELETE FROM conversations WHERE item_id=?').run(itemId);
+ for(const t of threads)purgeConversation(t.id);
  db.prepare('DELETE FROM favorites WHERE item_id=?').run(itemId);
  for(const r of readRequests()){
   if(r.item_id===itemId)db.prepare('DELETE FROM trade_requests WHERE id=?').run(r.id);
  }
  db.prepare('DELETE FROM items WHERE id=?').run(itemId);
+};
+const requireSteward=(req,res,next)=>{
+ if(!req.user)return res.status(401).json({error:'请先登录'});
+ if(!privacy.isSteward(req.user))return res.status(403).json({error:'当前账号没有值守权限'});
+ next();
+};
+const enrichReports=rows=>{
+ const items=allItems();
+ return rows.map(r=>{
+  if(r.targetType==='item'){
+   const item=items.find(i=>String(i.id)===String(r.targetId));
+   return {...r,targetLabel:item?item.title:'物品已不存在',targetGone:!item};
+  }
+  if(r.targetType==='conversation'){
+   const row=db.prepare('SELECT id,item_id FROM conversations WHERE id=?').get(Number(r.targetId));
+   return {...r,targetLabel:row?('会话 #'+row.id+' · 物品 '+row.item_id):'会话已不存在',targetGone:!row};
+  }
+  return {...r,targetLabel:'用户 '+r.targetId,targetGone:false};
+ });
 };
 const app=express();app.disable('x-powered-by');app.use(express.json({limit:'2mb'}));
 app.use('/api',(req,res,next)=>{
@@ -92,7 +112,7 @@ app.post('/api/login',(req,res)=>{
   throw e;
  }
 });
-app.get('/api/account',(req,res)=>res.json(req.user));
+app.get('/api/account',(req,res)=>res.json({...req.user,steward:privacy.isSteward(req.user)}));
 app.get('/api/account/export',requireAccount,(req,res)=>{
  const actor=req.session;
  const rs=readRequests();
@@ -168,6 +188,16 @@ app.put('/api/blocks/:userId',requireAccount,(req,res)=>{
  res.json({ok:true,blocked:req.body?.blocked!==false});
 });
 app.post('/api/reports',requireAccount,(req,res)=>res.status(201).json(privacy.report(req.session,req.body||{})));
+app.get('/api/steward/reports',requireAccount,requireSteward,(req,res)=>{
+ const status=String(req.query.status||'open');
+ res.json(enrichReports(privacy.listReports(status==='all'?'all':status==='closed'?'closed':'open')));
+});
+app.patch('/api/steward/reports/:id',requireAccount,requireSteward,(req,res)=>{
+ const id=Number(req.params.id);
+ if(!Number.isInteger(id)||id<1)return res.status(400).json({error:'举报编号无效'});
+ const result=privacy.resolveReport(req.session,id,req.body||{},{removeItem:purgeItemData,removeConversation:purgeConversation});
+ res.json(enrichReports([result])[0]);
+});
 app.use('/api/conversations',chatRouter(db,allItems,readRequests,{blockedPair:privacy.blockedPair,audit:privacy.audit}));
 app.get('/api/items',(req,res)=>{
  const rs=readRequests();let result=allItems().map(i=>publicItem(i,rs,req.session));const {q,campus,category,sort,free,available}=req.query;

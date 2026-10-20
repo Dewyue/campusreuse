@@ -28,15 +28,28 @@ export function createPrivacy(db,dataDir){
    target_type TEXT NOT NULL,
    target_id TEXT NOT NULL,
    reason TEXT NOT NULL,
-   created_at TEXT NOT NULL
+   created_at TEXT NOT NULL,
+   status TEXT NOT NULL DEFAULT 'open',
+   note TEXT,
+   resolved_at TEXT,
+   resolver TEXT
   );`);
+ const reportCols=new Set(db.prepare('PRAGMA table_info(reports)').all().map(c=>c.name));
+ if(!reportCols.has('status'))db.exec("ALTER TABLE reports ADD COLUMN status TEXT NOT NULL DEFAULT 'open'");
+ if(!reportCols.has('note'))db.exec('ALTER TABLE reports ADD COLUMN note TEXT');
+ if(!reportCols.has('resolved_at'))db.exec('ALTER TABLE reports ADD COLUMN resolved_at TEXT');
+ if(!reportCols.has('resolver'))db.exec('ALTER TABLE reports ADD COLUMN resolver TEXT');
 
  const insertAudit=db.prepare('INSERT INTO audit_log(at,actor,action,detail) VALUES (?,?,?,?)');
  const insertBlock=db.prepare('INSERT OR IGNORE INTO blocks(actor,target,created_at) VALUES (?,?,?)');
  const deleteBlock=db.prepare('DELETE FROM blocks WHERE actor=? AND target=?');
  const listBlocks=db.prepare('SELECT target,created_at FROM blocks WHERE actor=? ORDER BY created_at DESC');
  const isBlocked=db.prepare('SELECT 1 AS ok FROM blocks WHERE (actor=? AND target=?) OR (actor=? AND target=?)');
- const insertReport=db.prepare('INSERT INTO reports(reporter,target_type,target_id,reason,created_at) VALUES (?,?,?,?,?)');
+ const insertReport=db.prepare("INSERT INTO reports(reporter,target_type,target_id,reason,created_at,status) VALUES (?,?,?,?,?,'open')");
+ const findReport=db.prepare('SELECT * FROM reports WHERE id=?');
+ const updateReport=db.prepare('UPDATE reports SET status=?, note=?, resolved_at=?, resolver=? WHERE id=?');
+ const stewardNames=new Set(String(process.env.STEWARD_USERNAMES||'').split(/[,，]/).map(s=>s.trim().toLowerCase()).filter(Boolean));
+ const isSteward=user=>Boolean(user?.username&&stewardNames.has(String(user.username).toLowerCase()));
 
  const chatDays=days('CHAT_RETENTION_DAYS')??90;
  const tradeDays=days('TRADE_RETENTION_DAYS')??180;
@@ -90,9 +103,58 @@ export function createPrivacy(db,dataDir){
   if(!id||id.length>40)fail('举报对象无效');
   const text=typeof reason==='string'?reason.trim():'';
   if(text.length<4||text.length>300)fail('请填写 4–300 字的举报说明');
-  insertReport.run(reporter,type,id,text,new Date().toISOString());
-  audit(reporter,'report',{targetType:type,targetId:id});
-  return {ok:true};
+  const created=new Date().toISOString();
+  const row=insertReport.run(reporter,type,id,text,created);
+  audit(reporter,'report',{targetType:type,targetId:id,id:Number(row.lastInsertRowid)});
+  return {ok:true,id:Number(row.lastInsertRowid)};
+ };
+
+ const publicReport=(row,extras={})=>({
+  id:row.id,
+  targetType:row.target_type,
+  targetId:row.target_id,
+  reason:row.reason,
+  createdAt:row.created_at,
+  status:row.status||'open',
+  note:row.note||'',
+  resolvedAt:row.resolved_at||null,
+  resolver:row.resolver||null,
+  reporter:row.reporter,
+  ...extras,
+ });
+
+ const listReports=(status='open')=>{
+  const rows=status==='all'
+   ?db.prepare('SELECT * FROM reports ORDER BY id DESC LIMIT 200').all()
+   :db.prepare("SELECT * FROM reports WHERE status=? ORDER BY id DESC LIMIT 200").all(status==='closed'?'closed':'open');
+  return rows.map(r=>publicReport(r));
+ };
+
+ const resolveReport=(resolver,id,body={},hooks={})=>{
+  const row=findReport.get(id);
+  if(!row)fail('举报不存在',404);
+  if((row.status||'open')!=='open')fail('该举报已处理',409);
+  const action=body.action;
+  if(!['dismiss','remove_target'].includes(action))fail('请选择驳回或下架/删除对象');
+  const note=typeof body.note==='string'?body.note.trim().slice(0,300):'';
+  let effect='none';
+  if(action==='remove_target'){
+   if(row.target_type==='item'){
+    const itemId=Number(row.target_id);
+    if(!Number.isInteger(itemId)||!hooks.removeItem)fail('无法下架该物品',409);
+    hooks.removeItem(itemId);
+    effect='item_removed';
+   }else if(row.target_type==='conversation'){
+    const conversationId=Number(row.target_id);
+    if(!Number.isInteger(conversationId)||!hooks.removeConversation)fail('无法删除该会话',409);
+    hooks.removeConversation(conversationId);
+    effect='conversation_removed';
+   }else fail('用户举报请选择驳回，并另行人工处理账号');
+  }
+  const resolvedAt=new Date().toISOString();
+  updateReport.run('closed',note||null,resolvedAt,resolver,id);
+  audit(resolver,'report_resolve',{id,action,effect,targetType:row.target_type,targetId:row.target_id});
+  return publicReport({...row,status:'closed',note:note||null,resolved_at:resolvedAt,resolver},{effect,action});
  };
 
  const cleanup=()=>{
@@ -124,7 +186,8 @@ export function createPrivacy(db,dataDir){
  return {
   audit,storePhoto,removePhoto,photoPath,photoDir,
   blockedPair,block,unblock,listBlocks:(actor)=>listBlocks.all(actor),
-  report,cleanup,
-  policy:{chatDays,tradeDays,auditDays},
+  report,listReports,resolveReport,isSteward,
+  cleanup,
+  policy:{chatDays,tradeDays,auditDays,stewardConfigured:stewardNames.size>0},
  };
 }

@@ -12,7 +12,7 @@ test('privacy: disk photos, export, report, block, retention hooks',async()=>{
  const dir=mkdtempSync(join(tmpdir(),'campus-privacy-'));
  let server;
  const start=async()=>{
-  server=spawn(process.execPath,['--experimental-strip-types','backend/server.js'],{env:{...process.env,DATA_DIR:dir,PORT:'3198',CHAT_RETENTION_DAYS:'90'},stdio:['ignore','pipe','pipe']});
+  server=spawn(process.execPath,['--experimental-strip-types','backend/server.js'],{env:{...process.env,DATA_DIR:dir,PORT:'3198',CHAT_RETENTION_DAYS:'90',STEWARD_USERNAMES:'privSeller'},stdio:['ignore','pipe','pipe']});
   await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('startup timeout')),8000);server.stdout.on('data',d=>{if(String(d).includes('ready')){clearTimeout(timer);resolve();}});server.on('exit',code=>{clearTimeout(timer);reject(Error('exit '+code));});});
  };
  const stop=async()=>{if(server?.exitCode===null){const ended=once(server,'exit');server.kill();await ended;}};
@@ -42,15 +42,31 @@ test('privacy: disk photos, export, report, block, retention hooks',async()=>{
   assert.equal(exported.body.published[0].hasPhoto,true);
   assert.ok(!('photo' in exported.body.published[0])||!String(exported.body.published[0].photo||'').startsWith('data:'));
   assert.match(exported.headers.get('content-disposition')||'',/campusreuse-export\.json/);
-  assert.equal((await request('/reports','POST',{targetType:'item',targetId:item.id,reason:'疑似违禁物品描述'},buyer)).status,201);
+  const filed=await request('/reports','POST',{targetType:'item',targetId:item.id,reason:'疑似违禁物品描述'},buyer);
+  assert.equal(filed.status,201);
   assert.equal((await request('/reports','POST',{targetType:'item',targetId:item.id,reason:'短'},buyer)).status,400);
-  const sellerId=(await request('/account','GET',undefined,seller)).body.id;
+  assert.equal((await request('/steward/reports','GET',undefined,buyer)).status,403);
+  const account=(await request('/account','GET',undefined,seller)).body;
+  assert.equal(account.steward,true);
+  const openReports=(await request('/steward/reports?status=open','GET',undefined,seller)).body;
+  assert.equal(openReports.length,1);
+  assert.equal(openReports[0].targetLabel,'合规教材');
+  const closed=await request('/steward/reports/'+filed.body.id,'PATCH',{action:'remove_target'},seller);
+  assert.equal(closed.status,200);
+  assert.equal(closed.body.status,'closed');
+  assert.equal(closed.body.effect,'item_removed');
+  assert.equal((await request('/items')).body.some(i=>i.id===item.id),false);
+  const again=(await request('/items','POST',{...listing,title:'第二本合规教材'},seller)).body;
+  const second=await request('/reports','POST',{targetType:'item',targetId:again.id,reason:'描述不实需要复核一下'},buyer);
+  assert.equal((await request('/steward/reports/'+second.body.id,'PATCH',{action:'dismiss'},seller)).body.status,'closed');
+  assert.equal((await request('/items')).body.some(i=>i.id===again.id),true);
+  const sellerId=account.id;
   assert.equal((await request('/blocks/'+sellerId,'PUT',{blocked:true},buyer)).status,200);
-  assert.equal((await request('/conversations','POST',{itemId:item.id},buyer)).status,403);
+  assert.equal((await request('/conversations','POST',{itemId:again.id},buyer)).status,403);
   assert.equal((await request('/blocks/'+sellerId,'PUT',{blocked:false},buyer)).status,200);
-  const thread=(await request('/conversations','POST',{itemId:item.id},buyer)).body;
+  const thread=(await request('/conversations','POST',{itemId:again.id},buyer)).body;
   assert.equal(thread.peerId,sellerId);
-  assert.equal((await request('/items/'+item.id,'DELETE',undefined,seller)).status,200);
+  assert.equal((await request('/items/'+again.id,'DELETE',undefined,seller)).status,200);
   assert.equal(readdirSync(join(dir,'photos')).length,0);
  }finally{await stop();rmSync(dir,{recursive:true,force:true});}
 });

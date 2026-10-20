@@ -4,6 +4,9 @@ services:
       context: .
       dockerfile: Dockerfile.api
     restart: unless-stopped
+    environment:
+      # Comma-separated usernames that can open the report desk in 我的.
+      STEWARD_USERNAMES: ${STEWARD_USERNAMES:-小兑试号,dewyue,probe_user}
     volumes:
       - market-data:/data
   web:
