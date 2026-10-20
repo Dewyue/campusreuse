@@ -50,7 +50,7 @@ export function ChatInbox({api,enabled,preview,onOpen,onLogin}:{api:ChatApi;enab
   </section>;
 }
 
-export function ChatThread({api,conversation,onMeeting,onDeleted,requests}:{api:ChatApi;conversation:Conversation;onMeeting:(item:ChatItem)=>void;onDeleted?:()=>void;requests:Array<{item_id:number;status:string}>}){
+export function ChatThread({api,conversation,onMeeting,onDeleted,onReport,onBlock,requests}:{api:ChatApi;conversation:Conversation;onMeeting:(item:ChatItem)=>void;onDeleted?:()=>void;onReport?:()=>void;onBlock?:()=>void;requests:Array<{item_id:number;status:string}>}){
   const [messages,setMessages]=useState<ChatMessage[]>([]),[text,setText]=useState(''),[place,setPlace]=useState(''),[showPlace,setShowPlace]=useState(false);
   const [error,setError]=useState(''),[syncError,setSyncError]=useState(''),[sending,setSending]=useState(false),[loading,setLoading]=useState(true),[removing,setRemoving]=useState(false);
   const scroll=useRef<HTMLDivElement>(null),cursor=useRef(0),syncing=useRef(false),lastRead=useRef(0);
@@ -115,7 +115,11 @@ export function ChatThread({api,conversation,onMeeting,onDeleted,requests}:{api:
   };
   return <section className="chat-thread" aria-label={'与'+conversation.peer+'的会话'}>
     <div className="chat-context"><div><b>{conversation.peer}</b><span>{conversation.item.title}</span><small>{conversation.item.campus} · ¥{conversation.item.price}</small></div>
-      <button type="button" className="chat-delete" disabled={removing} onClick={()=>void removeThread()}>删除会话</button></div>
+      <div className="chat-moderation">
+        {onReport&&<button type="button" className="chat-delete" onClick={onReport}>举报</button>}
+        {onBlock&&conversation.peerId&&<button type="button" className="chat-delete" onClick={onBlock}>拉黑</button>}
+        <button type="button" className="chat-delete" disabled={removing} onClick={()=>void removeThread()}>删除会话</button>
+      </div></div>
     <p className="demo-notice">勿发手机号、微信号或宿舍号；约在图书馆、食堂等公共地点面交。</p>
     <div className="chat-history" ref={scroll} role="log" aria-label="聊天记录">
       {loading&&!messages.length?<p className="chat-empty">正在加载消息…</p>:!messages.length?<p className="chat-empty">暂无消息</p>:messages.map(m=>

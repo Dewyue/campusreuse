@@ -22,6 +22,7 @@ img { display: block; width: 100%; object-fit: cover; }
 .chat-inbox-open small { color: #76767d; margin-left: 8px; font-weight: 400; }
 .chat-inbox-open em { color: #b34246; font-size: 13px; font-style: normal; font-weight: 700; }
 .chat-delete { flex-shrink: 0; min-height: 36px; padding: 0 10px; color: #c23b2c; font-size: 12px; }
+.chat-moderation { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 .danger-outline { color: #c23b2c !important; }
 .chat-login,.chat-contact button,.chat-tools button { display: inline-flex; align-items: center; gap: 8px; color: var(--blue); min-height: 44px; }
 .chat-contact { padding: 8px 24px; border-top: 1px solid #eee; }

@@ -23,6 +23,7 @@ export interface Conversation {
   item: ChatItem;
   role: 'buyer' | 'seller';
   peer: string;
+  peerId?: number;
   unread: number;
   lastText: string;
   updatedAt: string;

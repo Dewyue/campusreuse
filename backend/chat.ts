@@ -3,7 +3,7 @@ import type {DatabaseSync} from 'node:sqlite';
 import type {ChatItem, Conversation, ChatMessage} from '../shared/chat.ts';
 import {assertNoSensitive} from '../shared/sensitive.js';
 
-interface Item extends ChatItem {owner?: string}
+interface Item extends ChatItem {owner?: string; photoFile?: string}
 interface Thread {id: number; item_id: number; buyer: string; seller: string; created_at: string}
 interface Trade {id:number;item_id:number;buyer:string;seller:string}
 interface Row {id: number; sender: string; kind: 'text' | 'place'; text: string; created_at: string}
@@ -16,7 +16,8 @@ const positive = (value: unknown): number => {
   return n;
 };
 
-export function chatRouter(db: DatabaseSync, allItems: () => Item[], readTrades: () => Trade[]) {
+type PrivacyHooks={blockedPair:(a:string,b:string)=>boolean;audit:(actor:string,action:string,detail?:Record<string,unknown>)=>void};
+export function chatRouter(db: DatabaseSync, allItems: () => Item[], readTrades: () => Trade[], privacy?: PrivacyHooks) {
   db.exec(`CREATE TABLE IF NOT EXISTS conversations (
     id INTEGER PRIMARY KEY, item_id INTEGER NOT NULL, buyer TEXT NOT NULL,
     seller TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(item_id,buyer));
@@ -47,8 +48,8 @@ export function chatRouter(db: DatabaseSync, allItems: () => Item[], readTrades:
     const last=db.prepare('SELECT * FROM chat_messages WHERE conversation_id=? ORDER BY id DESC LIMIT 1').get(t.id) as unknown as Row|undefined;
     const count=db.prepare('SELECT count(*) AS n FROM chat_messages WHERE conversation_id=? AND sender!=? AND id>COALESCE((SELECT last_id FROM chat_reads WHERE conversation_id=? AND actor=?),0)').get(t.id,actor,t.id,actor);
     return {id:t.id,item:{id:item.id,title:item.title,campus:item.campus,price:item.price,image:item.image,
-      pickupPlace:item.pickupPlace,pickupWindow:item.pickupWindow,isMine:item.owner===actor},role:t.buyer===actor?'buyer':'seller',
-      peer:String(user?.username||'校园用户'),unread:Number(count?.n||0),
+      photo:item.photoFile?('/api/media/'+item.photoFile):item.photo,pickupPlace:item.pickupPlace,pickupWindow:item.pickupWindow,isMine:item.owner===actor},role:t.buyer===actor?'buyer':'seller',
+      peer:String(user?.username||'校园用户'),peerId:Number(peer.slice(2))||undefined,unread:Number(count?.n||0),
       lastText:last?(last.kind==='place'?'建议地点：':'')+last.text:'尚未发送消息',updatedAt:last?.created_at||t.created_at};
   };
   const message=(r: Row,actor: string): ChatMessage=>({id:r.id,mine:r.sender===actor,kind:r.kind,text:r.text,createdAt:r.created_at});
@@ -69,6 +70,7 @@ export function chatRouter(db: DatabaseSync, allItems: () => Item[], readTrades:
     if(!item.owner?.startsWith('u:')||!db.prepare('SELECT id FROM users WHERE id=?').get(Number(item.owner.slice(2))))return fail('该物品没有可联系的注册卖家',409);
     if(!buyer.startsWith('u:')||!db.prepare('SELECT id FROM users WHERE id=?').get(Number(buyer.slice(2))))return fail('对方尚未使用注册账号，无法在线沟通',409);
     if(trade&&trade.seller!==item.owner)return fail('物品归属发生变化',409);
+    if(privacy?.blockedPair(actor,item.owner)||privacy?.blockedPair(buyer,item.owner))return fail('双方存在拉黑关系，无法沟通',403);
     db.prepare('INSERT OR IGNORE INTO conversations(item_id,buyer,seller,created_at) VALUES (?,?,?,?)').run(id,buyer,item.owner,new Date().toISOString());
     const t=db.prepare('SELECT * FROM conversations WHERE item_id=? AND buyer=?').get(id,buyer) as unknown as Thread;
     res.json(summary(t,actor));
@@ -82,6 +84,7 @@ export function chatRouter(db: DatabaseSync, allItems: () => Item[], readTrades:
   });
   router.post('/:id/messages',(req,res)=>{
     const actor=(req as AuthRequest).session!,t=thread(positive(req.params.id),actor);
+    if(privacy?.blockedPair(t.buyer,t.seller))return fail('双方存在拉黑关系，无法发送消息',403);
     const body=req.body as Record<string,unknown>|undefined;
     const kind=body?.kind,text=typeof body?.text==='string'?body.text.trim():'',clientId=body?.clientId;
     if((kind!=='text'&&kind!=='place')||!text||text.length>(kind==='place'?80:1000))return fail('请填写有效消息，文字最多 1000 字，地点最多 80 字');
@@ -110,6 +113,7 @@ export function chatRouter(db: DatabaseSync, allItems: () => Item[], readTrades:
     db.prepare('DELETE FROM chat_messages WHERE conversation_id=?').run(t.id);
     db.prepare('DELETE FROM chat_reads WHERE conversation_id=?').run(t.id);
     db.prepare('DELETE FROM conversations WHERE id=?').run(t.id);
+    privacy?.audit(actor,'conversation_delete',{id:t.id,itemId:t.item_id});
     res.json({ok:true});
   });
   return router;
