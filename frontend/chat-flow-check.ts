@@ -26,8 +26,8 @@ try{
     const r=await fetch('http://127.0.0.1:3195/api'+path,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(body)});
     assert.ok(r.ok,await r.clone().text());return await r.json() as T;
   };
-  const seller=await post<{token:string}>('/register',{username:'sellerUI',password:'test-only-password'});
-  const buyer=await post<{token:string}>('/register',{username:'buyerUI',password:'test-only-password'});
+  const seller=await post<{token:string}>('/register',{username:'sellerUI',password:'test-only-password',privacyAccepted:true});
+  const buyer=await post<{token:string}>('/register',{username:'buyerUI',password:'test-only-password',privacyAccepted:true});
   await post('/items',{title:'双人聊天测试教材',description:'第七版两册',price:20,category:'书籍',campus:'新校区',condition:'轻微使用痕迹',functionStatus:'功能正常',defects:'少量划线',pickupPlace:'图书馆',pickupWindow:'下午',photo:'data:image/jpeg;base64,'+readFileSync('frontend/public/images/books.jpg').toString('base64'),disclosureConfirmed:true},seller.token);
   const a=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
   const b=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});

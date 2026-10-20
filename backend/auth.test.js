@@ -11,7 +11,7 @@ test('register, login, account session, and publish under a real user',async()=>
  const dir=mkdtempSync(join(tmpdir(),'campus-auth-test-'));
  let server;
  const start=async()=>{
-  server=spawn(process.execPath,['backend/server.js'],{env:{...process.env,DATA_DIR:dir,PORT:'3195'},stdio:['ignore','pipe','pipe']});
+  server=spawn(process.execPath,['--experimental-strip-types','backend/server.js'],{env:{...process.env,DATA_DIR:dir,PORT:'3195'},stdio:['ignore','pipe','pipe']});
   await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('API startup timeout')),8000);server.stdout.on('data',d=>{if(String(d).includes('ready')){clearTimeout(timer);resolve();}});server.on('error',reject);server.on('exit',code=>{clearTimeout(timer);reject(Error('API exited '+code));});});
  };
  const stop=async()=>{if(server&&server.exitCode===null){const ended=once(server,'exit');server.kill();await ended;}};
@@ -24,13 +24,14 @@ test('register, login, account session, and publish under a real user',async()=>
  try{
   await start();
   assert.equal((await request('/health')).body.auth,true);
-  assert.equal((await request('/register','POST',{username:'ab',password:'short'})).status,400);
-  assert.equal((await request('/register','POST',{username:'bad name',password:'password1'})).status,400);
-  const created=await request('/register','POST',{username:'南6阿栗',password:'password1'});
+  assert.equal((await request('/register','POST',{username:'ab',password:'short',privacyAccepted:true})).status,400);
+  assert.equal((await request('/register','POST',{username:'南6阿栗',password:'password1'})).status,400);
+  assert.equal((await request('/register','POST',{username:'bad name',password:'password1',privacyAccepted:true})).status,400);
+  const created=await request('/register','POST',{username:'南6阿栗',password:'password1',privacyAccepted:true});
   assert.equal(created.status,201);
   assert.equal(created.body.user.username,'南6阿栗');
   assert.match(created.body.token,/^[a-f0-9]{64}$/);
-  assert.equal((await request('/register','POST',{username:'南6阿栗',password:'password1'})).status,409);
+  assert.equal((await request('/register','POST',{username:'南6阿栗',password:'password1',privacyAccepted:true})).status,409);
   assert.equal((await request('/login','POST',{username:'南6阿栗',password:'wrongpass'})).status,401);
   const logged=await request('/login','POST',{username:'南6阿栗',password:'password1'});
   assert.equal(logged.status,200);assert.equal(logged.body.user.id,created.body.user.id);
@@ -40,11 +41,19 @@ test('register, login, account session, and publish under a real user',async()=>
   assert.equal(published.status,201);
   assert.equal(published.body.seller,'我');
   assert.equal(published.body.isMine,true);
-  const other=await request('/register','POST',{username:'zhouyan',password:'password1'});
+  const other=await request('/register','POST',{username:'zhouyan',password:'password1',privacyAccepted:true});
   const seen=(await request('/items','GET',undefined,other.body.token)).body.find(i=>i.id===published.body.id);
   assert.equal(seen.seller,'南6阿栗');assert.equal(seen.isMine,false);
-  assert.equal((await request('/logout','POST',{},logged.body.token)).status,200);
+  assert.equal((await request('/account/delete','POST',{password:'wrongpass'},logged.body.token)).status,401);
+  assert.equal((await request('/account/delete','POST',{password:'password1'},logged.body.token)).status,200);
   assert.equal((await request('/account','GET',undefined,logged.body.token)).status,401);
+  assert.equal((await request('/login','POST',{username:'南6阿栗',password:'password1'})).status,401);
+  const gone=(await request('/items','GET',undefined,other.body.token)).body.find(i=>i.id===published.body.id);
+  assert.equal(gone,undefined);
+  const again=await request('/register','POST',{username:'南6阿栗',password:'password1',privacyAccepted:true});
+  assert.equal(again.status,201);
+  assert.equal((await request('/logout','POST',{},again.body.token)).status,200);
+  assert.equal((await request('/account','GET',undefined,again.body.token)).status,401);
   const demo=await request('/items','GET',undefined);
   assert.equal(demo.status,400);
   const demoOk=await fetch('http://127.0.0.1:3195/api/items',{headers:{'X-Demo-Session':'test-session-123456789'}});

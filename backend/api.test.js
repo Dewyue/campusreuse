@@ -14,7 +14,7 @@ test('independent API: search, validation, publish, favorites, reservations, per
  const dir=mkdtempSync(join(tmpdir(),'campus-api-test-'));
  let server;
  const start=async()=>{
-   server=spawn(process.execPath,['backend/server.js'],{env:{...process.env,DATA_DIR:dir,PORT:'3197'},stdio:['ignore','pipe','pipe']});
+   server=spawn(process.execPath,['--experimental-strip-types','backend/server.js'],{env:{...process.env,DATA_DIR:dir,PORT:'3197'},stdio:['ignore','pipe','pipe']});
    await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('API startup timeout')),8000);server.stdout.on('data',d=>{if(String(d).includes('ready')){clearTimeout(timer);resolve();}});server.on('error',reject);server.on('exit',code=>{clearTimeout(timer);reject(Error('API exited '+code));});});
  };
  const stop=async()=>{if(server&&server.exitCode===null){const ended=once(server,'exit');server.kill();await ended;}};

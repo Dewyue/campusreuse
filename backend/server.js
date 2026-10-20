@@ -52,6 +52,35 @@ app.post('/api/logout',(req,res)=>{
  res.set('Set-Cookie',tokenCookie('',{secure:req.get('X-Forwarded-Proto')==='https'||req.secure,clear:true}));
  res.json({ok:true});
 });
+app.post('/api/account/delete',(req,res)=>{
+ if(!req.user)return res.status(401).json({error:'请先登录'});
+ auth.assertPassword(req.user.id,req.body?.password);
+ const actor=req.session;
+ db.exec('BEGIN IMMEDIATE');
+ try{
+  const threads=db.prepare('SELECT id FROM conversations WHERE buyer=? OR seller=?').all(actor,actor);
+  for(const t of threads){
+   db.prepare('DELETE FROM chat_messages WHERE conversation_id=?').run(t.id);
+   db.prepare('DELETE FROM chat_reads WHERE conversation_id=?').run(t.id);
+  }
+  db.prepare('DELETE FROM conversations WHERE buyer=? OR seller=?').run(actor,actor);
+  db.prepare('DELETE FROM favorites WHERE session=?').run(actor);
+  db.prepare('DELETE FROM reservations WHERE session=?').run(actor);
+  for(const r of readRequests()){
+   if(r.buyer===actor||r.seller===actor)db.prepare('DELETE FROM trade_requests WHERE id=?').run(r.id);
+  }
+  for(const item of allItems()){
+   if(item.owner===actor)db.prepare('DELETE FROM items WHERE id=?').run(item.id);
+  }
+  auth.deleteAccount(req.user.id);
+  db.exec('COMMIT');
+ }catch(e){
+  db.exec('ROLLBACK');
+  throw e;
+ }
+ res.set('Set-Cookie',tokenCookie('',{secure:req.get('X-Forwarded-Proto')==='https'||req.secure,clear:true}));
+ res.json({ok:true});
+});
 app.use('/api/conversations',chatRouter(db,allItems,readRequests));
 app.get('/api/items',(req,res)=>{
  const rs=readRequests();let result=allItems().map(i=>publicItem(i,rs,req.session));const {q,campus,category,sort,free,available}=req.query;

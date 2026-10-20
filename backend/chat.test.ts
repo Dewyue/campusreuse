@@ -26,7 +26,7 @@ test('account chat: ownership, two-way messages, retry, reads, proposals and per
   };
   try{
     await start();
-    const register=async(username:string)=>(await request<{token:string}>('/register','','POST',{username,password:'test-only-password'})).body.token;
+    const register=async(username:string)=>(await request<{token:string}>('/register','','POST',{username,password:'test-only-password',privacyAccepted:true})).body.token;
     const seller=await register('seller'),buyer=await register('buyer'),stranger=await register('stranger');
     const photo='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
     const item=(await request<{id:number}>('/items',seller,'POST',{title:'聊天测试教材',description:'教材两册',price:12,category:'书籍',campus:'新校区',condition:'轻微使用痕迹',functionStatus:'功能正常',defects:'少量划线',pickupPlace:'图书馆',pickupWindow:'下午',photo,disclosureConfirmed:true})).body;

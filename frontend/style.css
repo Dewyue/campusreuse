@@ -166,8 +166,16 @@ textarea { resize: vertical; }
 .auth-form { display: flex; flex-direction: column; gap: 16px; padding: 8px 0 28px; }
 .auth-tabs { margin: 0 0 4px; }
 .text-button { margin-left: auto; min-height: 44px; padding: 0 4px; color: var(--blue); font-size: 13px; }
+.text-button.danger { color: #c23b2c; }
+.consent-row { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; line-height: 1.6; color: #717176; }
+.consent-row input { width: 18px; min-width: 18px; min-height: 18px; margin-top: 2px; accent-color: var(--blue); }
+.consent-row a { color: var(--blue); }
 .profile h2 { font-size: 19px; font-weight: 600; }
 .profile p { color: #77777d; font-size: 11px; margin-top: 7px; }
+.profile p a { color: var(--blue); }
+.danger-zone { margin-top: 36px; padding-top: 22px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; }
+.danger-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.danger-button { min-height: 44px; padding: 0 16px; border-radius: 6px; background: #c23b2c; color: #fff; font-size: 13px; }
 .stats { display: grid; grid-template-columns: repeat(3,1fr); padding: 29px 0; margin-bottom: 10px; border-bottom: 1px solid var(--line); }
 .stats>div { display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 11px; color: #77777d; }
 .stats b { font-size: 25px; font-weight: 600; color: #1d1d1f; }

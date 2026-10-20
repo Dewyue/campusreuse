@@ -72,8 +72,12 @@ export function createAuth(db){
   return token;
  };
 
+ const deleteSessionsForUser=db.prepare('DELETE FROM sessions WHERE user_id=?');
+ const deleteUser=db.prepare('DELETE FROM users WHERE id=?');
+
  return {
   register(body){
+   if(body?.privacyAccepted!==true)throw Object.assign(new Error('请先阅读并同意隐私说明'),{status:400});
    const username=validateUsername(body?.username);
    const password=validatePassword(body?.password);
    if(findUserByName.get(username))throw Object.assign(new Error('该账号已被注册'),{status:409});
@@ -100,5 +104,14 @@ export function createAuth(db){
    return row?publicUser(row):null;
   },
   logout(token){if(token)deleteSession.run(token);},
+  assertPassword(userId,password){
+   const value=validatePassword(password);
+   const row=findUserById.get(userId);
+   if(!row||!verifyPassword(value,row.password_hash))throw Object.assign(new Error('密码不正确，无法注销'),{status:401});
+  },
+  deleteAccount(userId){
+   deleteSessionsForUser.run(userId);
+   deleteUser.run(userId);
+  },
  };
 }
