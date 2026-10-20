@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useRef,useState,type MouseEvent as ReactMouseEvent} from 'react';
 import {ChevronRight,MapPin,MessageCircle,Send} from 'lucide-react';
 import type {ChatApi,ChatItem,ChatMessage,Conversation,MessagePage} from '../shared/chat';
 
@@ -16,7 +16,7 @@ export function ChatContact({api,item,enabled,preview,onOpen,onLogin,requestId}:
     {error&&<p role="alert" className="form-error">{error}</p>}</div>;
 }
 export function ChatInbox({api,enabled,preview,onOpen,onLogin}:{api:ChatApi;enabled:boolean;preview:boolean;onOpen:(c:Conversation)=>void;onLogin:()=>void}){
-  const [threads,setThreads]=useState<Conversation[]>([]),[error,setError]=useState(''),[loading,setLoading]=useState(true);
+  const [threads,setThreads]=useState<Conversation[]>([]),[error,setError]=useState(''),[loading,setLoading]=useState(true),[busyId,setBusyId]=useState<number|null>(null);
   useEffect(()=>{
     if(!enabled||preview)return;
     let active=true,timer:ReturnType<typeof setTimeout>;
@@ -27,20 +27,32 @@ export function ChatInbox({api,enabled,preview,onOpen,onLogin}:{api:ChatApi;enab
     };
     void sync();return()=>{active=false;clearTimeout(timer);};
   },[enabled,preview,api]);
+  const remove=async(c:Conversation,e:ReactMouseEvent)=>{
+    e.stopPropagation();
+    if(busyId||!window.confirm('删除与「'+c.peer+'」关于「'+c.item.title+'」的会话？聊天记录将不可恢复。'))return;
+    setBusyId(c.id);setError('');
+    try{await api('/conversations/'+c.id,{method:'DELETE'});setThreads(list=>list.filter(x=>x.id!==c.id));}
+    catch(err){setError(errorText(err));}
+    finally{setBusyId(null);}
+  };
   return <section className="chat-inbox" aria-label="买卖沟通"><h2>沟通</h2>
     {preview?<p className="demo-notice">当前为单机预览，在线沟通需连接服务器。</p>:!enabled?<button className="chat-login" onClick={onLogin}>登录后查看消息<ChevronRight size={18}/></button>:<>
+    <p className="demo-notice">请勿在聊天中发送手机号、微信号或宿舍房间号；面交请选校内公共地点。</p>
     {error&&<p role="alert" className="form-error">{error}</p>}
     {loading?<p className="chat-empty">正在加载消息…</p>:!threads.length?<p className="chat-empty">暂无会话</p>:threads.map(c=>
-      <button key={c.id} className="chat-inbox-row" onClick={()=>onOpen(c)}>
-        <MessageCircle size={22}/><span><b>{c.peer}<small>{c.role==='buyer'?'卖家':'买家'}</small></b><strong>{c.item.title}</strong><span>{c.lastText}</span></span>
-        {c.unread>0&&<em aria-label={c.unread+'条未读消息'}>{c.unread>99?'99+':c.unread}</em>}<ChevronRight size={18}/>
-      </button>)}</>}
+      <div key={c.id} className="chat-inbox-row">
+        <button type="button" className="chat-inbox-open" onClick={()=>onOpen(c)}>
+          <MessageCircle size={22}/><span><b>{c.peer}<small>{c.role==='buyer'?'卖家':'买家'}</small></b><strong>{c.item.title}</strong><span>{c.lastText}</span></span>
+          {c.unread>0&&<em aria-label={c.unread+'条未读消息'}>{c.unread>99?'99+':c.unread}</em>}<ChevronRight size={18}/>
+        </button>
+        <button type="button" className="chat-delete" disabled={busyId===c.id} onClick={e=>void remove(c,e)}>删除</button>
+      </div>)}</>}
   </section>;
 }
 
-export function ChatThread({api,conversation,onMeeting,requests}:{api:ChatApi;conversation:Conversation;onMeeting:(item:ChatItem)=>void;requests:Array<{item_id:number;status:string}>}){
+export function ChatThread({api,conversation,onMeeting,onDeleted,requests}:{api:ChatApi;conversation:Conversation;onMeeting:(item:ChatItem)=>void;onDeleted?:()=>void;requests:Array<{item_id:number;status:string}>}){
   const [messages,setMessages]=useState<ChatMessage[]>([]),[text,setText]=useState(''),[place,setPlace]=useState(''),[showPlace,setShowPlace]=useState(false);
-  const [error,setError]=useState(''),[syncError,setSyncError]=useState(''),[sending,setSending]=useState(false),[loading,setLoading]=useState(true);
+  const [error,setError]=useState(''),[syncError,setSyncError]=useState(''),[sending,setSending]=useState(false),[loading,setLoading]=useState(true),[removing,setRemoving]=useState(false);
   const scroll=useRef<HTMLDivElement>(null),cursor=useRef(0),syncing=useRef(false),lastRead=useRef(0);
   const draft=useRef<{kind:string;text:string;id:string}|null>(null),alive=useRef(true);
   const meeting=(item:ChatItem)=>{
@@ -95,8 +107,16 @@ export function ChatThread({api,conversation,onMeeting,requests}:{api:ChatApi;co
     }catch(e){if(alive.current)setError(errorText(e));}
     finally{if(alive.current)setSending(false);}
   };
+  const removeThread=async()=>{
+    if(removing||!window.confirm('删除此会话及全部消息？不可恢复。'))return;
+    setRemoving(true);setError('');
+    try{await api('/conversations/'+conversation.id,{method:'DELETE'});onDeleted?.();}
+    catch(e){setError(errorText(e));setRemoving(false);}
+  };
   return <section className="chat-thread" aria-label={'与'+conversation.peer+'的会话'}>
-    <div className="chat-context"><b>{conversation.peer}</b><span>{conversation.item.title}</span><small>{conversation.item.campus} · ¥{conversation.item.price}</small></div>
+    <div className="chat-context"><div><b>{conversation.peer}</b><span>{conversation.item.title}</span><small>{conversation.item.campus} · ¥{conversation.item.price}</small></div>
+      <button type="button" className="chat-delete" disabled={removing} onClick={()=>void removeThread()}>删除会话</button></div>
+    <p className="demo-notice">勿发手机号、微信号或宿舍号；约在图书馆、食堂等公共地点面交。</p>
     <div className="chat-history" ref={scroll} role="log" aria-label="聊天记录">
       {loading&&!messages.length?<p className="chat-empty">正在加载消息…</p>:!messages.length?<p className="chat-empty">暂无消息</p>:messages.map(m=>
         <article key={m.id} className={'chat-message '+(m.mine?'is-mine':'')}>
@@ -113,7 +133,7 @@ export function ChatThread({api,conversation,onMeeting,requests}:{api:ChatApi;co
       <button type="submit" className="primary" disabled={sending||!place.trim()}>发送地点</button>
     </form>}
     <form className="chat-compose" onSubmit={e=>{e.preventDefault();void send('text');}}>
-      <textarea aria-label="消息内容" value={text} onChange={e=>setText(e.target.value)} maxLength={1000} rows={2} placeholder="发送消息" disabled={sending}/>
+      <textarea aria-label="消息内容" value={text} onChange={e=>setText(e.target.value)} maxLength={1000} rows={2} placeholder="发送消息，勿填微信或手机号" disabled={sending}/>
       <button type="submit" title="发送消息" aria-label="发送消息" disabled={sending||!text.trim()}><Send size={21}/></button>
     </form>
   </section>;

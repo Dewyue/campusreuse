@@ -1,6 +1,7 @@
 import {Router, type Request} from 'express';
 import type {DatabaseSync} from 'node:sqlite';
 import type {ChatItem, Conversation, ChatMessage} from '../shared/chat.ts';
+import {assertNoSensitive} from '../shared/sensitive.js';
 
 interface Item extends ChatItem {owner?: string}
 interface Thread {id: number; item_id: number; buyer: string; seller: string; created_at: string}
@@ -84,6 +85,7 @@ export function chatRouter(db: DatabaseSync, allItems: () => Item[], readTrades:
     const body=req.body as Record<string,unknown>|undefined;
     const kind=body?.kind,text=typeof body?.text==='string'?body.text.trim():'',clientId=body?.clientId;
     if((kind!=='text'&&kind!=='place')||!text||text.length>(kind==='place'?80:1000))return fail('请填写有效消息，文字最多 1000 字，地点最多 80 字');
+    assertNoSensitive(text,kind==='place'?'面交地点':'消息');
     if(typeof clientId!=='string'||!/^[a-zA-Z0-9-]{16,80}$/.test(clientId))return fail('消息标识无效');
     const existing=db.prepare('SELECT * FROM chat_messages WHERE conversation_id=? AND sender=? AND client_id=?').get(t.id,actor,clientId) as unknown as Row|undefined;
     if(existing){
@@ -101,6 +103,13 @@ export function chatRouter(db: DatabaseSync, allItems: () => Item[], readTrades:
     const id=positive(req.body?.lastId);
     if(!db.prepare('SELECT id FROM chat_messages WHERE id=? AND conversation_id=?').get(id,t.id))return fail('消息不存在',404);
     db.prepare('INSERT INTO chat_reads(conversation_id,actor,last_id) VALUES (?,?,?) ON CONFLICT(conversation_id,actor) DO UPDATE SET last_id=MAX(last_id,excluded.last_id)').run(t.id,actor,id);
+    res.json({ok:true});
+  });
+  router.delete('/:id',(req,res)=>{
+    const actor=(req as AuthRequest).session!,t=thread(positive(req.params.id),actor);
+    db.prepare('DELETE FROM chat_messages WHERE conversation_id=?').run(t.id);
+    db.prepare('DELETE FROM chat_reads WHERE conversation_id=?').run(t.id);
+    db.prepare('DELETE FROM conversations WHERE id=?').run(t.id);
     res.json({ok:true});
   });
   return router;

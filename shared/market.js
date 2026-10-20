@@ -1,3 +1,5 @@
+import {assertNoSensitive} from './sensitive.js';
+
 export const campuses=['南校区','新校区','校本部','铁道校区','湘雅新校区','湘雅老校区'];
 export const categories=['书籍','数码','生活','运动','穿搭'];
 export const conditions=['近全新','轻微使用痕迹','明显使用痕迹'];
@@ -18,7 +20,13 @@ export function validateListing(body){
  if(!conditions.includes(body.condition)||!functions.includes(body.functionStatus)||!text(body.defects,300)||!text(body.pickupPlace,80)||!text(body.pickupWindow,80))fail('请补全品相、功能、瑕疵和面交安排');
  if(body.disclosureConfirmed!==true)fail('请确认已如实披露物品信息');
  validatePhoto(body.photo);
- return {title:body.title.trim(),description:body.description.trim(),price:Math.round(body.price*100)/100,category:body.category,campus:normalizeCampus(body.campus),condition:body.condition,functionStatus:body.functionStatus,defects:body.defects.trim(),pickupPlace:body.pickupPlace.trim(),pickupWindow:body.pickupWindow.trim(),photo:body.photo};
+ const title=body.title.trim(),description=body.description.trim(),defects=body.defects.trim(),pickupPlace=body.pickupPlace.trim(),pickupWindow=body.pickupWindow.trim();
+ assertNoSensitive(title,'标题');
+ assertNoSensitive(description,'物品说明');
+ assertNoSensitive(defects,'瑕疵说明');
+ assertNoSensitive(pickupPlace,'面交地点');
+ assertNoSensitive(pickupWindow,'面交时段');
+ return {title,description,price:Math.round(body.price*100)/100,category:body.category,campus:normalizeCampus(body.campus),condition:body.condition,functionStatus:body.functionStatus,defects,pickupPlace,pickupWindow,photo:body.photo};
 }
 export function expireRequests(requests,now=Date.now()){
  for(const r of requests){const time=Date.parse(r.meetingAt);if(r.status==='pending'&&time<=now||r.status==='accepted'&&!r.buyerConfirmed&&!r.sellerConfirmed&&time+86400000<=now)r.status='expired';}
@@ -42,7 +50,9 @@ export function createRequest(items,requests,actor,body,now=Date.now()){
  if(availability(item,requests)!=='available')fail('物品已被预约或完成交接',409);
  const time=Date.parse(body.meetingAt);
  if(!text(body.place,80)||!Number.isFinite(time)||time<=now||time>now+30*86400000||body.safetyConfirmed!==true)fail('请填写未来 30 天内的时间、公共面交地点并确认面交约定');
- const record={id:Math.max(0,...requests.map(r=>r.id))+1,item_id:item.id,buyer:actor,seller:item.owner||'demo-seller-'+item.id,created_at:new Date(now).toISOString(),status:'pending',meetingAt:new Date(time).toISOString(),place:body.place.trim(),buyerConfirmed:false,sellerConfirmed:false,agreedPrice:item.price,evidence:null};
+ const place=body.place.trim();
+ assertNoSensitive(place,'面交地点');
+ const record={id:Math.max(0,...requests.map(r=>r.id))+1,item_id:item.id,buyer:actor,seller:item.owner||'demo-seller-'+item.id,created_at:new Date(now).toISOString(),status:'pending',meetingAt:new Date(time).toISOString(),place,buyerConfirmed:false,sellerConfirmed:false,agreedPrice:item.price,evidence:null};
  requests.push(record);return record;
 }
 export function actOnRequest(requests,actor,id,body){

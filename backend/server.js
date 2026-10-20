@@ -24,6 +24,23 @@ const readRequests=()=>{const rs=db.prepare('SELECT body FROM trade_requests ORD
 const mutate=fn=>{db.exec('BEGIN IMMEDIATE');try{const rs=readRequests();const result=fn(rs);saveRequests(rs);db.exec('COMMIT');return result;}catch(e){db.exec('ROLLBACK');throw e;}};
 const auth=createAuth(db);
 const openPaths=new Set(['/health','/register','/login']);
+const requireAccount=(req,res,next)=>{
+ if(!req.user)return res.status(401).json({error:'请先登录后再操作'});
+ next();
+};
+const purgeItemData=(itemId)=>{
+ const threads=db.prepare('SELECT id FROM conversations WHERE item_id=?').all(itemId);
+ for(const t of threads){
+  db.prepare('DELETE FROM chat_messages WHERE conversation_id=?').run(t.id);
+  db.prepare('DELETE FROM chat_reads WHERE conversation_id=?').run(t.id);
+ }
+ db.prepare('DELETE FROM conversations WHERE item_id=?').run(itemId);
+ db.prepare('DELETE FROM favorites WHERE item_id=?').run(itemId);
+ for(const r of readRequests()){
+  if(r.item_id===itemId)db.prepare('DELETE FROM trade_requests WHERE id=?').run(r.id);
+ }
+ db.prepare('DELETE FROM items WHERE id=?').run(itemId);
+};
 const app=express();app.disable('x-powered-by');app.use(express.json({limit:'2mb'}));
 app.use('/api',(req,res,next)=>{
  res.set('Cache-Control','no-store');
@@ -34,7 +51,7 @@ app.use('/api',(req,res,next)=>{
   if(!user)return res.status(401).json({error:'登录已失效，请重新登录'});
   req.user=user;req.token=token;req.session='u:'+user.id;return next();
  }
- if(req.path==='/account'||req.path==='/logout')return res.status(401).json({error:'请先登录'});
+ if(req.path==='/account'||req.path==='/logout'||req.path.startsWith('/account/'))return res.status(401).json({error:'请先登录'});
  const session=req.get('X-Demo-Session');
  if(!/^[a-zA-Z0-9-]{16,80}$/.test(session||''))return res.status(400).json({error:'缺少有效的演示会话'});
  req.session=session;next();
@@ -70,7 +87,7 @@ app.post('/api/account/delete',(req,res)=>{
    if(r.buyer===actor||r.seller===actor)db.prepare('DELETE FROM trade_requests WHERE id=?').run(r.id);
   }
   for(const item of allItems()){
-   if(item.owner===actor)db.prepare('DELETE FROM items WHERE id=?').run(item.id);
+   if(item.owner===actor)purgeItemData(item.id);
   }
   auth.deleteAccount(req.user.id);
   db.exec('COMMIT');
@@ -92,21 +109,32 @@ app.get('/api/items',(req,res)=>{
 app.get('/api/me',(req,res)=>{
  const rs=readRequests(),items=allItems();res.json({favorites:db.prepare('SELECT item_id FROM favorites WHERE session=?').all(req.session).map(x=>x.item_id),published:items.filter(i=>i.owner===req.session).map(i=>publicItem(i,rs,req.session)),reservations:rs.filter(r=>r.buyer===req.session).reverse().map(r=>publicRequest(r,items,rs,req.session)),incoming:rs.filter(r=>r.seller===req.session).reverse().map(r=>publicRequest(r,items,rs,req.session))});
 });
-app.put('/api/favorites/:id',(req,res)=>{
+app.put('/api/favorites/:id',requireAccount,(req,res)=>{
  const id=Number(req.params.id);if(!Number.isInteger(id)||!allItems().some(i=>i.id===id))return res.status(404).json({error:'商品不存在'});
  if(typeof req.body?.saved!=='boolean')return res.status(400).json({error:'收藏状态无效'});
  if(req.body.saved)db.prepare('INSERT OR IGNORE INTO favorites VALUES (?,?)').run(req.session,id);else db.prepare('DELETE FROM favorites WHERE session=? AND item_id=?').run(req.session,id);res.json({saved:req.body.saved});
 });
-app.post('/api/items',(req,res)=>{
+app.post('/api/items',requireAccount,(req,res)=>{
  const clean=validateListing(req.body||{});
- const seller=req.user?.username||'校园发布者';
+ const seller=req.user.username;
  const item={...clean,image:'placeholder',seller,avatar:seller.slice(0,1),color:'#e3ecf4',tag:'新发布',wish:0,owner:req.session};
  const row=db.prepare('INSERT INTO items(body) VALUES (?)').run(JSON.stringify(item));res.status(201).json(publicItem({...item,id:Number(row.lastInsertRowid)},readRequests(),req.session));
 });
-app.post('/api/reservations',(req,res)=>{
+app.delete('/api/items/:id',requireAccount,(req,res)=>{
+ const id=Number(req.params.id);
+ if(!Number.isInteger(id))return res.status(400).json({error:'商品编号无效'});
+ const item=allItems().find(i=>i.id===id);
+ if(!item)return res.status(404).json({error:'商品不存在'});
+ if(item.owner!==req.session)return res.status(403).json({error:'只能删除自己发布的物品'});
+ db.exec('BEGIN IMMEDIATE');
+ try{purgeItemData(id);db.exec('COMMIT');}
+ catch(e){db.exec('ROLLBACK');throw e;}
+ res.json({ok:true});
+});
+app.post('/api/reservations',requireAccount,(req,res)=>{
  const items=allItems();const result=mutate(rs=>publicRequest(createRequest(items,rs,req.session,req.body||{}),items,rs,req.session));res.status(201).json(result);
 });
-app.patch('/api/reservations/:id',(req,res)=>{
+app.patch('/api/reservations/:id',requireAccount,(req,res)=>{
  const items=allItems();const result=mutate(rs=>publicRequest(actOnRequest(rs,req.session,Number(req.params.id),req.body||{}),items,rs,req.session));res.json(result);
 });
 app.use((err,req,res,next)=>res.status(err.status||500).json({error:err.status===413?'照片或内容太大':err.status?err.message:'服务暂时不可用，请稍后重试'}));

@@ -19,10 +19,10 @@ export function Publish({submit,busy}){
   <div className="form-row"><label>品相<select aria-label="品相" name="condition" required><option value="">请选择</option>{conditions.map(c=><option key={c}>{c}</option>)}</select></label><label>功能情况<select aria-label="功能情况" name="functionStatus" required><option value="">请选择</option>{functionStates.map(c=><option key={c}>{c}</option>)}</select></label></div>
   <label>已知瑕疵<textarea name="defects" required maxLength={300} rows={2} placeholder="具体写出划线、缺页、维修、故障等；没有则填无已知瑕疵"/></label>
   <label>物品所在校区<select aria-label="物品所在校区" name="campus" required><option value="">请选择</option>{campuses.map(c=><option key={c}>{c}</option>)}</select></label>
-  <label>建议面交地点<input name="pickupPlace" required maxLength={80} placeholder="校内公共地点，不填宿舍房间号"/></label>
+  <label>建议面交地点<input name="pickupPlace" required maxLength={80} placeholder="校内公共地点，如图书馆正门；勿填宿舍号"/></label>
   <label>可面交时段<input name="pickupWindow" required maxLength={80} placeholder="例如：工作日 17:00—19:00"/></label>
-  <label className="consent"><input name="disclosureConfirmed" type="checkbox" required/><span>物品归我所有，照片与描述属实，已披露已知瑕疵。</span></label>
-  <p className="demo-notice">课程演示，未接入学校身份认证、专业质检或资金托管。禁止发布违禁物品、证件、账号及个人信息。</p>
+  <label className="consent"><input name="disclosureConfirmed" type="checkbox" required/><span>物品归我所有，照片与描述属实，已披露已知瑕疵；未写入手机号、微信号或证件信息。</span></label>
+  <p className="demo-notice">课程演示，未接入学校身份认证、专业质检或资金托管。禁止发布违禁物品、证件、账号；描述与地点中不要填写手机、微信或宿舍房间号。</p>
   <button className="primary" disabled={busy||reading||!photo}>{busy?'正在发布…':reading?'读取照片中…':'发布闲置'}</button>
  </form>;
 }

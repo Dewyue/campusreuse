@@ -64,6 +64,11 @@ test('account chat: ownership, two-way messages, retry, reads, proposals and per
     await stop();await start();
     assert.equal((await request<MessagePage>(path,buyer)).body.messages.length,2);
     assert.equal((await request<Conversation[]>('/conversations',buyer)).body[0].unread,1);
+    assert.equal((await request(path,buyer,'POST',{kind:'text',text:'加我微信 wxid_campus12',clientId:crypto.randomUUID()})).status,400);
+    assert.equal((await request('/conversations/'+c.id,stranger,'DELETE')).status,404);
+    assert.equal((await request('/conversations/'+c.id,buyer,'DELETE')).status,200);
+    assert.equal((await request<Conversation[]>('/conversations',buyer)).body.length,0);
+    assert.equal((await request(path,seller)).status,404);
     await request('/logout',buyer,'POST');
     assert.equal((await request(path,buyer)).status,401);
   }finally{await stop();rmSync(dir,{recursive:true,force:true});}
